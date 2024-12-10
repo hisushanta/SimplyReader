@@ -2,130 +2,215 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-import 'package:file_picker/file_picker.dart';
 
 class FilePreviewScreen extends StatefulWidget {
+  final File file;
+
+  const FilePreviewScreen({Key? key, required this.file}) : super(key: key);
+
   @override
-  _PDFOutlineExampleState createState() => _PDFOutlineExampleState();
+  // ignore: library_private_types_in_public_api
+  _FilePreviewScreenState createState() => _FilePreviewScreenState();
 }
 
-class _PDFOutlineExampleState extends State<FilePreviewScreen> {
+class _FilePreviewScreenState extends State<FilePreviewScreen> {
   final PdfViewerController _pdfViewerController = PdfViewerController();
   List<Outline> _outlines = [];
-  File? _selectedFile;
+  bool _isOutlineLoading = true;
+  bool _isOutlineVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration.zero, () => _loadPDFOutlinesInBackground());
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PDF Viewer with Outline'),
+        backgroundColor: Colors.white,
+        // title: const Text('PDF Viewer with Outline'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.menu_book),
-            onPressed: _outlines.isNotEmpty ? _showOutlineMenu : null,
+            icon: Icon(_isOutlineVisible ? Icons.close : Icons.menu_book),
+            onPressed: _toggleOutlineVisibility,
           ),
         ],
       ),
-      body: _selectedFile == null
-          ? Center(
-              child: ElevatedButton(
-                child: const Text('Select PDF'),
-                onPressed: _selectAndLoadPDF,
-              ),
-            )
-          : SfPdfViewer.file(
-              _selectedFile!,
-              controller: _pdfViewerController,
-              pageLayoutMode: PdfPageLayoutMode.single,
-              initialZoomLevel: 0.75,
-              canShowHyperlinkDialog: true,
-              enableTextSelection: true,
-              enableHyperlinkNavigation: true,
+      body: Row(
+        children: [
+          if (_isOutlineVisible && !_isOutlineLoading)
+            Container(
+              width: 250,
+              color: Colors.grey.shade200,
+              child: _buildCollapsibleOutlineList(),
             ),
+          Expanded(
+            child: Stack(
+              children: [
+                SfPdfViewer.file(
+                  widget.file,
+                  controller: _pdfViewerController,
+                  pageLayoutMode: PdfPageLayoutMode.single,
+                  initialZoomLevel: 1.0,
+                  canShowHyperlinkDialog: true,
+                  enableTextSelection: true,
+                  enableHyperlinkNavigation: true,
+                  canShowPasswordDialog: true,
+                ),
+                // Zoom controls
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: Column(
+                    children: [
+                      FloatingActionButton(
+                        backgroundColor: Colors.white,
+                        heroTag: 'zoomIn',
+                        mini: true,
+                        onPressed: _zoomIn,
+                        child: const Icon(Icons.zoom_in,color: Colors.black,),
+                      ),
+                      const SizedBox(height: 8),
+                      FloatingActionButton(
+                        backgroundColor: Colors.white,
+                        heroTag: 'zoomOut',
+                        mini: true,
+                        onPressed: _zoomOut,
+                        child: const Icon(Icons.zoom_out,color: Colors.black,),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  // Method to select a PDF file
-  Future<void> _selectAndLoadPDF() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
-    if (result != null && result.files.single.path != null) {
-      final file = File(result.files.single.path!);
-      setState(() {
-        _selectedFile = file;
-      });
+  void _toggleOutlineVisibility() {
+    setState(() {
+      _isOutlineVisible = !_isOutlineVisible;
+    });
+  }
 
-      // Load outlines from the selected PDF
-      _loadPDFOutlines(file);
+  Future<void> _loadPDFOutlinesInBackground() async {
+    try {
+      final outlines = await _extractPDFOutlines(widget.file);
+      setState(() {
+        _outlines = outlines;
+      });
+    } catch (e) {
+      print("Error loading outlines: $e");
+    } finally {
+      setState(() {
+        _isOutlineLoading = false;
+      });
     }
   }
 
-  // Extract outlines (bookmarks) from the PDF
-  Future<void> _loadPDFOutlines(File pdfFile) async {
-    final document = PdfDocument(inputBytes: pdfFile.readAsBytesSync());
+  Future<List<Outline>> _extractPDFOutlines(File pdfFile) async {
+    final document = PdfDocument(inputBytes: await pdfFile.readAsBytes());
     final bookmarks = document.bookmarks;
     List<Outline> outlines = [];
 
-    // Extract bookmarks recursively
-    void extractBookmarks(PdfBookmark bookmark, int level) {
+    void extractBookmarks(PdfBookmark bookmark, int level, List<Outline> parentList) {
       if (bookmark.title.isNotEmpty && bookmark.destination != null) {
-        // Use indexOf to find the page number
         final pageIndex = document.pages.indexOf(bookmark.destination!.page) + 1;
-        outlines.add(
-          Outline(
-            title: bookmark.title,
-            pageNumber: pageIndex,
-            level: level,
-          ),
+        final outline = Outline(
+          title: bookmark.title,
+          pageNumber: pageIndex,
+          level: level,
+          children: [],
         );
-      }
-      if (bookmark.count > 0) {
-        for (int i = 0; i < bookmark.count; i++) {
-          extractBookmarks(bookmark[i], level + 1);
+        parentList.add(outline);
+
+        if (bookmark.count > 0) {
+          for (int i = 0; i < bookmark.count; i++) {
+            extractBookmarks(bookmark[i], level + 1, outline.children);
+          }
         }
       }
     }
 
     for (int i = 0; i < bookmarks.count; i++) {
-      extractBookmarks(bookmarks[i], 0);
+      extractBookmarks(bookmarks[i], 0, outlines);
     }
 
-    setState(() {
-      _outlines = outlines;
-    });
-
     document.dispose();
+    return outlines;
   }
 
-  // Show the outline menu
-  void _showOutlineMenu() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return ListView.builder(
-          itemCount: _outlines.length,
-          itemBuilder: (context, index) {
-            final outline = _outlines[index];
-            return ListTile(
+  Widget _buildCollapsibleOutlineList() {
+    return ListView(
+      children: _outlines.map((outline) => _buildCustomExpansionTile(outline)).toList(),
+    );
+  }
+
+  Widget _buildCustomExpansionTile(Outline outline) {
+    bool isExpanded = false;
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        return Column(
+          children: [
+            ListTile(
               title: Text(outline.title),
-              leading: Icon(Icons.bookmark, color: Colors.blueGrey),
               subtitle: Text('Page ${outline.pageNumber}'),
+              trailing: outline.children.isNotEmpty
+                  ? GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          isExpanded = !isExpanded; // Toggle expansion
+                        });
+                      },
+                      child: Icon(
+                        isExpanded ? Icons.expand_less : Icons.expand_more,
+                      ),
+                    )
+                  : null,
               onTap: () {
-                Navigator.pop(context); // Close the menu
-                _pdfViewerController.jumpToPage(outline.pageNumber); // Navigate to the page
+                _pdfViewerController.jumpToPage(outline.pageNumber);
               },
-            );
-          },
+            ),
+            if (isExpanded)
+              Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: Column(
+                  children: outline.children
+                      .map((child) => _buildCustomExpansionTile(child))
+                      .toList(),
+                ),
+              ),
+          ],
         );
       },
     );
   }
+
+  void _zoomIn() {
+    _pdfViewerController.zoomLevel += 0.25;
+  }
+
+  void _zoomOut() {
+    _pdfViewerController.zoomLevel = (_pdfViewerController.zoomLevel - 0.25).clamp(0.5, 4.0);
+  }
 }
 
-// Outline model for storing bookmarks
+// Outline class for nested bookmarks
 class Outline {
   final String title;
   final int pageNumber;
   final int level;
+  final List<Outline> children;
 
-  Outline({required this.title, required this.pageNumber, required this.level});
+  Outline({
+    required this.title,
+    required this.pageNumber,
+    required this.level,
+    this.children = const [],
+  });
 }

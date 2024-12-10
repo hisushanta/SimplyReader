@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'pages/pdfView.dart';
@@ -11,12 +13,10 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const UploadScreen(),
-      routes: {
-        'filePreview': (context) =>  FilePreviewScreen(),
-      },
+      home: UploadScreen(),
+
     );
   }
 }
@@ -35,11 +35,13 @@ class UploadScreen extends StatelessWidget {
       // File picked successfully
       final file = result.files.first;
       // Navigate to a different screen and pass the file path
-      Navigator.pushNamed(
+      Navigator.push(
         context,
-        'filePreview',
-        arguments: file,
+        MaterialPageRoute(
+          builder: (context) => FilePreviewScreen(file: File(file.path!)),
+        ),
       );
+
     } else {
       // User canceled the picker
       ScaffoldMessenger.of(context).showSnackBar(
@@ -53,7 +55,7 @@ class UploadScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.orange,
+      backgroundColor: Colors.white,
       body: Center(
         child: Container(
           width: 300,
@@ -61,7 +63,7 @@ class UploadScreen extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
+            boxShadow: const [
               BoxShadow(
                 color: Colors.black26,
                 blurRadius: 8,
