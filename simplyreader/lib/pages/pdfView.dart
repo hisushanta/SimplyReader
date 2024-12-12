@@ -18,11 +18,25 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
   List<Outline> _outlines = [];
   bool _isOutlineLoading = true;
   bool _isOutlineVisible = false;
+  double zoomControll = 1.0;
 
   @override
   void initState() {
     super.initState();
     Future.delayed(Duration.zero, () => _loadPDFOutlinesInBackground());
+    _pdfViewerController.addListener(_onZoomChanged);
+
+  }
+  void _onZoomChanged() {
+    setState(() {
+      zoomControll = _pdfViewerController.zoomLevel;
+    });
+  }
+
+@override
+  void dispose() {
+    _pdfViewerController.removeListener(_onZoomChanged);
+    super.dispose();
   }
 
   @override
@@ -30,7 +44,6 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
-        // title: const Text('PDF Viewer with Outline'),
         actions: [
           IconButton(
             icon: Icon(_isOutlineVisible ? Icons.close : Icons.menu_book),
@@ -48,18 +61,20 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
             ),
           Expanded(
             child: Stack(
+              fit: StackFit.passthrough,
               children: [
                 SfPdfViewer.file(
                   widget.file,
                   controller: _pdfViewerController,
+                  canShowPageLoadingIndicator: false,
                   pageLayoutMode: PdfPageLayoutMode.single,
-                  initialZoomLevel: 1.0,
-                  canShowHyperlinkDialog: true,
-                  enableTextSelection: true,
-                  enableHyperlinkNavigation: true,
-                  canShowPasswordDialog: true,
+                  initialZoomLevel: zoomControll,
+                  scrollDirection: PdfScrollDirection.vertical,
+                  onPageChanged: (PdfPageChangedDetails details) {
+                    _pdfViewerController.zoomLevel = zoomControll; // Keep zoom consistent
+                    
+                  },
                 ),
-                // Zoom controls
                 Positioned(
                   bottom: 16,
                   right: 16,
@@ -70,7 +85,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                         heroTag: 'zoomIn',
                         mini: true,
                         onPressed: _zoomIn,
-                        child: const Icon(Icons.zoom_in,color: Colors.black,),
+                        child: const Icon(Icons.zoom_in, color: Colors.black),
                       ),
                       const SizedBox(height: 8),
                       FloatingActionButton(
@@ -78,7 +93,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                         heroTag: 'zoomOut',
                         mini: true,
                         onPressed: _zoomOut,
-                        child: const Icon(Icons.zoom_out,color: Colors.black,),
+                        child: const Icon(Icons.zoom_out, color: Colors.black),
                       ),
                     ],
                   ),
@@ -90,6 +105,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
       ),
     );
   }
+
 
   void _toggleOutlineVisibility() {
     setState(() {
@@ -173,7 +189,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                     )
                   : null,
               onTap: () {
-                _pdfViewerController.jumpToPage(outline.pageNumber);
+                  _pdfViewerController.jumpToPage(outline.pageNumber);
               },
             ),
             if (isExpanded)
@@ -193,10 +209,17 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
 
   void _zoomIn() {
     _pdfViewerController.zoomLevel += 0.25;
+    setState(() {
+      zoomControll = _pdfViewerController.zoomLevel;  
+    });
+    
   }
 
   void _zoomOut() {
     _pdfViewerController.zoomLevel = (_pdfViewerController.zoomLevel - 0.25).clamp(0.5, 4.0);
+    setState(() {
+      zoomControll = _pdfViewerController.zoomLevel;
+    });
   }
 }
 
