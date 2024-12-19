@@ -23,18 +23,11 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
   void initState() {
     super.initState();
     Future.delayed(Duration.zero, () => _loadPDFOutlinesInBackground());
-    _pdfViewerController.addListener(_onZoomChanged);
 
-  }
-  void _onZoomChanged() {
-    setState(() {
-      zoomControll = _pdfViewerController.zoomLevel;
-    });
   }
 
 @override
   void dispose() {
-    _pdfViewerController.removeListener(_onZoomChanged);
     super.dispose();
   }
 
@@ -69,7 +62,9 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                   initialZoomLevel: zoomControll,
                   scrollDirection: PdfScrollDirection.vertical,
                   onPageChanged: (PdfPageChangedDetails details) {
-                    _pdfViewerController.zoomLevel = zoomControll; // Keep zoom consistent
+                     Future.delayed(const Duration(milliseconds: 100), () {
+                        _pdfViewerController.zoomLevel = zoomControll;
+                      });
                   },
 
                 ),
@@ -206,16 +201,16 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
   }
 
   void _zoomIn() {
-    _pdfViewerController.zoomLevel += 0.25;
     setState(() {
+      _pdfViewerController.zoomLevel += 0.25;
       zoomControll = _pdfViewerController.zoomLevel;  
     });
     
   }
 
   void _zoomOut() {
-    _pdfViewerController.zoomLevel = (_pdfViewerController.zoomLevel - 0.25).clamp(0.5, 4.0);
     setState(() {
+    _pdfViewerController.zoomLevel = (_pdfViewerController.zoomLevel - 0.25).clamp(0.5, 4.0);
       zoomControll = _pdfViewerController.zoomLevel;
     });
   }
