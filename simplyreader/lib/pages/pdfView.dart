@@ -2,32 +2,34 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+
 class FilePreviewScreen extends StatefulWidget {
   final File file;
 
   const FilePreviewScreen({Key? key, required this.file}) : super(key: key);
 
   @override
-  // ignore: library_private_types_in_public_api
   _FilePreviewScreenState createState() => _FilePreviewScreenState();
 }
 
 class _FilePreviewScreenState extends State<FilePreviewScreen> {
   final PdfViewerController _pdfViewerController = PdfViewerController();
+  final TextEditingController _pageController = TextEditingController();
   List<Outline> _outlines = [];
   bool _isOutlineLoading = true;
   bool _isOutlineVisible = false;
   double zoomControll = 1.0;
-
+  int _totalPages = 0;
+  int _currentPage = 1;
   @override
   void initState() {
     super.initState();
     Future.delayed(Duration.zero, () => _loadPDFOutlinesInBackground());
-
   }
 
-@override
+  @override
   void dispose() {
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -36,11 +38,57 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
+        title: Row(
+          children: [
+            Text(
+              '$_currentPage / $_totalPages',
+              style: TextStyle(color: Colors.black, fontSize: 16),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 70,
+              height: 32,
+              child: TextField(
+                controller: _pageController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                decoration: InputDecoration(
+                  hintText: '',
+                  filled: true,
+                  fillColor: Colors.grey.shade400,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onSubmitted: (value) {
+                  final page = int.tryParse(value);
+                  if (page != null && page > 0 && page <= _totalPages) {
+                    _pdfViewerController.jumpToPage(page);
+                    setState(() {
+                      _currentPage = page;
+                    });
+                  }
+                  else if (page != null && (page < 0 || page > _totalPages)){
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Out of page number $page',style: TextStyle(color: Colors.red),),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                    _pageController.text = "";
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: Icon(_isOutlineVisible ? Icons.close : Icons.menu_book),
             onPressed: _toggleOutlineVisibility,
           ),
+
         ],
       ),
       body: Row(
@@ -62,11 +110,14 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                   initialZoomLevel: zoomControll,
                   scrollDirection: PdfScrollDirection.vertical,
                   onPageChanged: (PdfPageChangedDetails details) {
-                     Future.delayed(const Duration(milliseconds: 100), () {
-                        _pdfViewerController.zoomLevel = zoomControll;
-                      });
+                    setState(() {
+                      _currentPage = details.newPageNumber;
+                      _pageController.text = _currentPage.toString();
+                    });
+                    Future.delayed(const Duration(milliseconds: 100), () {
+                      _pdfViewerController.zoomLevel = zoomControll;
+                    });
                   },
-
                 ),
                 Positioned(
                   bottom: 16,
@@ -99,7 +150,6 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     );
   }
 
-
   void _toggleOutlineVisibility() {
     setState(() {
       _isOutlineVisible = !_isOutlineVisible;
@@ -125,7 +175,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     final document = PdfDocument(inputBytes: await pdfFile.readAsBytes());
     final bookmarks = document.bookmarks;
     List<Outline> outlines = [];
-
+    _totalPages = document.pages.count ;
     void extractBookmarks(PdfBookmark bookmark, int level, List<Outline> parentList) {
       if (bookmark.title.isNotEmpty && bookmark.destination != null) {
         final pageIndex = document.pages.indexOf(bookmark.destination!.page) + 1;
@@ -148,7 +198,6 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
     for (int i = 0; i < bookmarks.count; i++) {
       extractBookmarks(bookmarks[i], 0, outlines);
     }
-
     document.dispose();
     return outlines;
   }
@@ -182,7 +231,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                     )
                   : null,
               onTap: () {
-                  _pdfViewerController.jumpToPage(outline.pageNumber);
+                _pdfViewerController.jumpToPage(outline.pageNumber);
               },
             ),
             if (isExpanded)
@@ -203,20 +252,18 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
   void _zoomIn() {
     setState(() {
       _pdfViewerController.zoomLevel += 0.25;
-      zoomControll = _pdfViewerController.zoomLevel;  
+      zoomControll = _pdfViewerController.zoomLevel;
     });
-    
   }
 
   void _zoomOut() {
     setState(() {
-    _pdfViewerController.zoomLevel = (_pdfViewerController.zoomLevel - 0.25).clamp(0.5, 4.0);
+      _pdfViewerController.zoomLevel = (_pdfViewerController.zoomLevel - 0.25).clamp(0.5, 4.0);
       zoomControll = _pdfViewerController.zoomLevel;
     });
   }
 }
 
-// Outline class for nested bookmarks
 class Outline {
   final String title;
   final int pageNumber;
