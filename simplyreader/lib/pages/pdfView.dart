@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:syncfusion_flutter_core/theme.dart';
 
 class FilePreviewScreen extends StatefulWidget {
   final File file;
@@ -103,8 +104,13 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
           Expanded(
             child: Stack(
               children: [
-                Padding(padding: const EdgeInsets.all(8.0),
-                child:SfPdfViewer.file(
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                child:SfPdfViewerTheme(
+                data: const SfPdfViewerThemeData(
+                  backgroundColor: Colors.white,
+                ),
+                child: SfPdfViewer.file(
                   widget.file,
                   controller: _pdfViewerController,
                   canShowPageLoadingIndicator: false,
@@ -121,6 +127,7 @@ class _FilePreviewScreenState extends State<FilePreviewScreen> {
                       _pdfViewerController.zoomLevel = zoomControll;
                     });
                   },
+                ),
                 ),
                 ),
                 Positioned(
